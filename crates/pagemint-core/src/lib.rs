@@ -4,6 +4,8 @@
 
 mod perspective;
 mod enhance;
+#[cfg(target_os = "android")]
+mod android;
 
 pub use perspective::{Corner, OutputPlan, PaperFormat, PerspectiveError, plan, rectify};
 pub use enhance::{EnhanceSettings, pro_enhance};
