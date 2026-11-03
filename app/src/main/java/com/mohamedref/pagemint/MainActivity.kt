@@ -28,6 +28,7 @@ import com.mohamedref.pagemint.io.ImageIO
 import com.mohamedref.pagemint.io.ScanExport
 import com.mohamedref.pagemint.ui.CameraCapture
 import com.mohamedref.pagemint.ui.CropEditor
+import com.mohamedref.pagemint.update.AppUpdaterButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -161,7 +162,7 @@ private fun ScannerApp(engineReady: Boolean) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("PageMint", style = MaterialTheme.typography.headlineMedium)
                     Spacer(Modifier.weight(1f))
-                    Text("Offline scan", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    AppUpdaterButton()
                 }
                 Spacer(Modifier.height(20.dp))
                 if (!engineReady) {

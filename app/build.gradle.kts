@@ -1,3 +1,11 @@
+val releaseKeyFile = System.getenv("PAGEMINT_KEYSTORE_PATH")
+val releaseStorePassword = System.getenv("PAGEMINT_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("PAGEMINT_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("PAGEMINT_KEY_PASSWORD")
+val releaseSigningAvailable = listOf(
+    releaseKeyFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword
+).all { !it.isNullOrBlank() }
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,13 +20,26 @@ android {
         applicationId = "com.mohamedref.pagemint"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = providers.gradleProperty("pagemintVersionCode").orNull?.toIntOrNull() ?: 1
+        versionName = providers.gradleProperty("pagemintVersionName").orNull ?: "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    signingConfigs {
+        if (releaseSigningAvailable) {
+            create("signedRelease") {
+                storeFile = file(releaseKeyFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (releaseSigningAvailable) {
+                signingConfig = signingConfigs.getByName("signedRelease")
+            }
         }
     }
     compileOptions {
