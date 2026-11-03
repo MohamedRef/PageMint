@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/pagemint-core"]
+resolver = "2"
