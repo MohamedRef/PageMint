@@ -59,7 +59,6 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.6.2")
     implementation("androidx.camera:camera-view:1.6.2")
     implementation("androidx.exifinterface:exifinterface:1.4.2")
-    implementation("org.opencv:opencv:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
 }
