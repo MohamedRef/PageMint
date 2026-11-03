@@ -5,7 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
+import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -23,7 +23,7 @@ import javax.net.ssl.HttpsURLConnection
  * verification, and installation always requires the user's approval.
  */
 object ReleaseUpdater {
-    private const val REPO_API = "https://api.github.com/repos/MohamedRef/PageMint/releases/latest"
+    private const val REPO_API = "https://api.github.com/repos/MohamedRef/PageMint/releases?per_page=30"
     private const val ASSET_NAME = "PageMint-release.apk"
     private const val MAX_APK_BYTES = 250_000_000L
     private const val MAX_JSON_BYTES = 1_048_576
@@ -57,17 +57,29 @@ object ReleaseUpdater {
             if (exception.code == 404) return@withContext Check.NotPublished
             throw exception
         }
-        val response = try {
+        val releases = try {
             val payload = readLimited(connection, MAX_JSON_BYTES)
-            JSONObject(payload.toString(Charsets.UTF_8))
+            JSONArray(payload.toString(Charsets.UTF_8))
         } finally {
             connection.disconnect()
         }
-        require(!response.optBoolean("draft", false)) { "Release is not published" }
-        require(!response.optBoolean("prerelease", false)) { "Only stable releases are supported" }
-
-        val version = ReleaseVersion.parse(response.optString("tag_name"))
-            ?: throw IOException("Release tag must be vMAJOR.MINOR.PATCH")
+        // GitHub /releases/latest deliberately excludes Pre-releases. Scan the
+        // published releases and ignore *all* stable releases and drafts.
+        // Version ordering is deterministic; publication time is not an upgrade order.
+        val previews = (0 until releases.length()).mapNotNull { index ->
+            releases.optJSONObject(index)?.let { json ->
+                ReleaseChannel.Candidate(
+                    tag = json.optString("tag_name"),
+                    draft = json.optBoolean("draft", false),
+                    prerelease = json.optBoolean("prerelease", false),
+                )?.let { candidate -> candidate to json }
+            }
+        }
+        val newest = ReleaseChannel.latestPreview(previews.map { it.first })
+            ?: return@withContext Check.NotPublished
+        val response = previews.first { it.first == newest }.second
+        val version = ReleaseVersion.parse(newest.tag)
+            ?: return@withContext Check.NotPublished
         val asset = response.optJSONArray("assets")
             ?.let { assets ->
                 (0 until assets.length())
