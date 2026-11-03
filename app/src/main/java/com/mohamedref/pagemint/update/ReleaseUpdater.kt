@@ -62,8 +62,8 @@ object ReleaseUpdater {
         } finally {
             connection.disconnect()
         }
-        check(!response.optBoolean("draft", false)) { "Release is not published" }
-        check(!response.optBoolean("prerelease", false)) { "Only stable releases are supported" }
+        require(!response.optBoolean("draft", false)) { "Release is not published" }
+        require(!response.optBoolean("prerelease", false)) { "Only stable releases are supported" }
 
         val version = ReleaseVersion.parse(response.optString("tag_name"))
             ?: throw IOException("Release tag must be vMAJOR.MINOR.PATCH")
@@ -116,7 +116,7 @@ object ReleaseUpdater {
             onProgress(100)
             return@withContext file
         }
-        val tmp = File(directory, "$ASSET_NAME.part")
+        val tmp = File(directory, "PageMint-release.part.apk")
         tmp.delete()
         try {
             val connection = openHttps(URL(release.downloadUrl), apiRequest = false)
