@@ -1,9 +1,9 @@
-name: Publish signed PageMint release
+name: Publish signed PageMint Preview
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish (example: 0.1.1)"
+        description: "Preview version to publish (example: 0.1.1)"
         required: true
         type: string
   push:
@@ -104,7 +104,7 @@ jobs:
           set -euo pipefail
           gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease \
             "-PpagemintVersionCode=$RELEASE_CODE" \
-            "-PpagemintVersionName=$RELEASE_VERSION"
+            "-PpagemintVersionName=$RELEASE_VERSION-preview"
           APK=app/build/outputs/apk/release/app-release.apk
           test -s "$APK"
           "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/36.0.0/apksigner" verify --verbose "$APK"
@@ -118,13 +118,13 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Release $RELEASE_TAG already exists; refusing to replace a published APK" >&2
+            echo "Preview $RELEASE_TAG already exists; refusing to replace a published APK" >&2
             exit 1
           fi
           gh release create "$RELEASE_TAG" \
             dist/PageMint-release.apk \
             dist/PageMint-release.apk.sha256 \
             --target "$GITHUB_SHA" \
-            --title "PageMint $RELEASE_VERSION" \
+            --title "PageMint $RELEASE_VERSION Preview" \
             --generate-notes \
-            --latest
+            --prerelease
