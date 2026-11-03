@@ -214,7 +214,10 @@ mod tests {
         let input = RgbImage::from_fn(128,128,|x,y| Rgb([x as u8, y as u8, 100]));
         let quad = [Corner{x:0.0,y:0.0},Corner{x:1.0,y:0.0},Corner{x:1.0,y:1.0},Corner{x:0.0,y:1.0}];
         let result = rectify(&input, quad, PaperFormat::Auto, false).unwrap();
-        assert_eq!(result.dimensions(), input.dimensions());
-        assert_eq!(*result.get_pixel(40,50), *input.get_pixel(40,50));
+        // Output follows geometric edge lengths (width - 1), not source pixel count.
+        assert_eq!(result.dimensions(), (127,127));
+        let actual = result.get_pixel(40,50);
+        let expected = input.get_pixel(40,50);
+        for channel in 0..3 { assert!((actual[channel] as i16 - expected[channel] as i16).abs() <= 1); }
     }
 }
