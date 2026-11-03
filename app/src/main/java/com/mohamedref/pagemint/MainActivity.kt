@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private enum class Stage { HOME, CAMERA, CROP, RESULT }
+private enum class DisplayMode { ORIGINAL, COLOR_ENHANCE, CLEAN_BW }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,7 +59,8 @@ private fun ScannerApp(engineReady: Boolean) {
     var safetyBorder by remember { mutableStateOf(true) }
     var cropped by remember { mutableStateOf<Bitmap?>(null) }
     var enhanced by remember { mutableStateOf<Bitmap?>(null) }
-    var showEnhanced by remember { mutableStateOf(true) }
+    var cleanBw by remember { mutableStateOf<Bitmap?>(null) }
+    var displayMode by remember { mutableStateOf(DisplayMode.CLEAN_BW) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     var cameraAllowed by remember {
@@ -78,13 +80,15 @@ private fun ScannerApp(engineReady: Boolean) {
                 }
                 // Dispose old images only after the new image is ready.
                 source?.takeIf { it !== bitmap }?.recycle()
-                cropped?.recycle(); enhanced?.recycle()
+                cropped?.recycle(); enhanced?.recycle(); cleanBw?.recycle()
                 source = bitmap
                 corners = found.corners
                 detection = found
                 pageFormat = PageFormat.AUTO
                 cropped = null
                 enhanced = null
+                cleanBw = null
+                displayMode = DisplayMode.CLEAN_BW
                 stage = Stage.CROP
             } catch (error: Exception) {
                 status = "Could not open image: ${error.message.orEmpty()}"
@@ -110,7 +114,11 @@ private fun ScannerApp(engineReady: Boolean) {
         if (it) stage = Stage.CAMERA else status = "Camera permission is needed to take photos. Gallery import still works."
     }
     val savePdf = androidx.activity.compose.rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
-        val output = if (showEnhanced) enhanced else cropped
+        val output = when (displayMode) {
+            DisplayMode.ORIGINAL -> cropped
+            DisplayMode.COLOR_ENHANCE -> enhanced
+            DisplayMode.CLEAN_BW -> cleanBw
+        }
         if (uri != null && output != null) scope.launch {
             busy = true
             try {
@@ -121,7 +129,11 @@ private fun ScannerApp(engineReady: Boolean) {
         }
     }
     val saveJpeg = androidx.activity.compose.rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/jpeg")) { uri ->
-        val output = if (showEnhanced) enhanced else cropped
+        val output = when (displayMode) {
+            DisplayMode.ORIGINAL -> cropped
+            DisplayMode.COLOR_ENHANCE -> enhanced
+            DisplayMode.CLEAN_BW -> cleanBw
+        }
         if (uri != null && output != null) scope.launch {
             busy = true
             try {
@@ -202,15 +214,16 @@ private fun ScannerApp(engineReady: Boolean) {
                                     status = null
                                     scope.launch {
                                         try {
-                                            val (newCrop, newEnhanced) = withContext(Dispatchers.Default) {
+                                            val (newCrop, newBw) = withContext(Dispatchers.Default) {
                                                 val crop = RustProcessor.rectify(bitmap, cropCorners, cropFormat, keepBorder)
-                                                try { Pair(crop, RustProcessor.proEnhance(crop)) }
+                                                try { Pair(crop, RustProcessor.cleanBlackWhite(crop)) }
                                                 catch (error: Throwable) { crop.recycle(); throw error }
                                             }
-                                            cropped?.recycle(); enhanced?.recycle()
+                                            cropped?.recycle(); enhanced?.recycle(); cleanBw?.recycle()
                                             cropped = newCrop
-                                            enhanced = newEnhanced
-                                            showEnhanced = true
+                                            enhanced = null
+                                            cleanBw = newBw
+                                            displayMode = DisplayMode.CLEAN_BW
                                             stage = Stage.RESULT
                                         } catch (error: Exception) {
                                             status = "Could not process scan: ${error.message.orEmpty()}"
@@ -222,18 +235,44 @@ private fun ScannerApp(engineReady: Boolean) {
                     }
                     Stage.RESULT -> {
                         val originalResult = cropped
-                        val proResult = enhanced
-                        if (originalResult != null && proResult != null) {
+                        val bwResult = cleanBw
+                        if (originalResult != null && bwResult != null) {
                             Text("Review scan", style = MaterialTheme.typography.titleLarge)
                             Spacer(Modifier.height(8.dp))
-                            Text("Compare the original crop against local Pro Enhance.", style = MaterialTheme.typography.bodySmall)
+                            Text("Compare clean B&W, color enhance and the original crop.", style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.height(10.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                FilterChip(selected = !showEnhanced, onClick = { showEnhanced = false }, label = { Text("Original crop") })
-                                FilterChip(selected = showEnhanced, onClick = { showEnhanced = true }, label = { Text("Pro Enhance") })
+                                FilterChip(selected = displayMode == DisplayMode.ORIGINAL,
+                                    onClick = { displayMode = DisplayMode.ORIGINAL }, label = { Text("Original") })
+                                FilterChip(selected = displayMode == DisplayMode.CLEAN_BW,
+                                    onClick = { displayMode = DisplayMode.CLEAN_BW }, label = { Text("Clean B&W") })
+                                FilterChip(selected = displayMode == DisplayMode.COLOR_ENHANCE,
+                                    onClick = {
+                                        if (enhanced != null) {
+                                            displayMode = DisplayMode.COLOR_ENHANCE
+                                        } else if (!busy) {
+                                            busy = true
+                                            scope.launch {
+                                                try {
+                                                    val result = withContext(Dispatchers.Default) {
+                                                        RustProcessor.proEnhance(originalResult)
+                                                    }
+                                                    enhanced = result
+                                                    displayMode = DisplayMode.COLOR_ENHANCE
+                                                } catch (error: Exception) {
+                                                    status = "Could not enhance colors: ${error.message.orEmpty()}"
+                                                } finally { busy = false }
+                                            }
+                                        }
+                                    }, label = { Text("Color") })
                             }
                             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                                Image((if (showEnhanced) proResult else originalResult).asImageBitmap(),
+                                val current = when (displayMode) {
+                                    DisplayMode.ORIGINAL -> originalResult
+                                    DisplayMode.CLEAN_BW -> bwResult
+                                    DisplayMode.COLOR_ENHANCE -> enhanced ?: originalResult
+                                }
+                                Image(current.asImageBitmap(),
                                     "Processed document", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                             }
                             Spacer(Modifier.height(12.dp))
@@ -248,7 +287,11 @@ private fun ScannerApp(engineReady: Boolean) {
                                     Text("Save JPG")
                                 }
                                 OutlinedButton(onClick = {
-                                    val bitmap = if (showEnhanced) proResult else originalResult
+                                    val bitmap = when (displayMode) {
+                                        DisplayMode.ORIGINAL -> originalResult
+                                        DisplayMode.CLEAN_BW -> bwResult
+                                        DisplayMode.COLOR_ENHANCE -> enhanced ?: originalResult
+                                    }
                                     scope.launch {
                                         busy = true
                                         try {
