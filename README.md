@@ -13,7 +13,7 @@ An independent, offline-first Android document scanner. **MVP / not production v
 - Separate Rust **Clean B&W** mode: morphological closing estimates the paper background, normalizes shadows and yields white paper with softly graded ink. Check faint color marks before exporting.
 - Before/after preview with **Original**, **Clean B&W** (default) and **Color** (existing color enhancement, computed on demand).
 - Save single-page PDF or JPEG through the system document picker; share a JPEG by scoped FileProvider.
-- **Updates** button in the app header checks the latest signed GitHub Release, verifies the APK checksum/package/signing identity, and opens Android's installer for an in-place update. See [setup and signing](docs/UPDATES.md).
+- **Preview updates** in the app header checks only published GitHub Pre-releases (ignores Stable Releases), verifies APK checksum/package/signing identity, then opens Android's installer for an in-place update. See [setup and signing](docs/UPDATES.md).
 - No login, advertising SDK or document upload endpoint. Documents remain on the device. Internet permission is used only by the user-initiated GitHub Releases updater.
 
 ## Limitations
@@ -21,7 +21,7 @@ An independent, offline-first Android document scanner. **MVP / not production v
 - Auto cropping is classical computer vision and can fail on severe shadows, white-on-white backgrounds, folded corners and curved book pages. When uncertain it defaults to a full-frame quad for manual correction.
 - These are original local restoration filters, **not CamScanner's proprietary Magic Pro/Omnifix**. Fine text, coloured stamps and severe highlights need device-level testing.
 - Auto perspective ratio is estimated, not camera-calibrated; extreme one-axis skew or wide-angle lens distortion can require selecting the known paper size. Folded or curved pages still need dewarping.
-- No live edge overlay, auto shutter, dewarping, multi-page PDF, OCR, history, camera zoom controls or release signing yet.
+- No live edge overlay, auto shutter, dewarping, multi-page PDF, OCR, history or camera zoom controls yet. Preview publishing requires configuring permanent release-signing secrets.
 - Photos are decoded to a maximum of about 4200 px on the longest edge to limit memory; no promise of full sensor resolution.
 - State is in-memory; work in progress does not survive process death. Export before closing.
 - Debug APKs build successfully in GitHub Actions; real-device scan quality and the signed-release update path still require device validation.
@@ -53,7 +53,7 @@ The Rust detector score is a heuristic and is **not a calibrated probability**. 
 
 ## Application updates
 
-Use the **Updates** button in the app header on every screen. It checks a GitHub Release (no background polling), downloads a newer signed APK and opens Android's installer. **Stable signed GitHub Releases require one-time keystore setup in GitHub Actions secrets**; the automatically signed debug APKs may use different keys, so switching to the stable update channel can require a one-time uninstall/reinstall. See [docs/UPDATES.md](docs/UPDATES.md) for the exact procedure. Subsequent updates signed by the same key install over the current version and preserve app data.
+Use **Preview updates** in the app header on every screen. It checks **GitHub Pre-releases only** (no Stable Releases or background polling), downloads a newer signed APK and opens Android's installer. The **signed Preview channel** requires one-time keystore setup in GitHub Actions secrets; the automatically signed debug APKs may use different keys, so switching to Preview can require a one-time uninstall/reinstall. See [docs/UPDATES.md](docs/UPDATES.md) for the exact procedure. Subsequent Preview updates signed with the same key install over the current version and preserve app data.
 
 ## Development tests
 
