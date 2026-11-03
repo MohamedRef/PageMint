@@ -1,11 +1,15 @@
-# Updating PageMint without reinstalling
+# Updating PageMint through Preview releases
 
-PageMint checks the latest public, non-prerelease GitHub Release for a signed
-`PageMint-release.apk` when the user taps **Updates** in the app header.
+PageMint checks **only published GitHub Pre-releases (Preview channel)** for a signed
+`PageMint-release.apk` when the user taps **Preview updates** in the app header.
+It ignores stable releases, draft releases and malformed version tags. The latest
+eligible Preview is chosen by Android versionCode, not publication timestamp.
+GitHub's `/releases/latest` excludes Pre-releases; the app uses `/releases?per_page=30` instead.
 
 ## On-device behavior
 
-1. The user selects **Updates**. PageMint retrieves the latest GitHub Release.
+1. The user selects **Preview updates**. PageMint retrieves recent GitHub Releases
+   and selects the newest published **Pre-release** only.
 2. It compares Android `versionCode` with the installed version.
 3. For a newer version, it downloads the exact release APK over HTTPS.
 4. It verifies the GitHub SHA-256 asset digest, file size, application ID,
@@ -58,15 +62,20 @@ base64 < pagemint-release.jks | tr -d '\n'
 Copy the base64 directly into GitHub's encrypted secret field; do not paste it
 into issues, PRs, messages, or code. Keep a private offline backup of the key.
 
-## Publish an update
+## Publish a Preview update
 
-Open **Actions → Publish signed PageMint release → Run workflow** on the `main`
+Open **Actions → Publish signed PageMint Preview → Run workflow** on the `main`
 branch. Enter `0.1.1` the first time, then `0.1.2`, `0.1.3` and so on.
 You can also push a `vMAJOR.MINOR.PATCH` tag.
 
 The workflow runs Rust tests, compiles the native Android libraries, runs
 Android JVM tests, builds and verifies the signed release APK, and publishes
-the `PageMint-release.apk` and its `.sha256` to GitHub Releases.
+the `PageMint-release.apk` and its `.sha256` to GitHub Releases **with the
+GitHub Pre-release flag enabled** (`--prerelease`), titled `PageMint 0.1.1 Preview`.
+It never publishes this workflow's artifacts as a Stable Release.
+The Git tag is still `v0.1.1`; it is the GitHub **Pre-release flag**, not a
+suffix on the tag, that selects this update channel. Android's versionName is
+`0.1.1-preview`.
 It **fails without the four signing secrets** and refuses to overwrite an
 existing GitHub release asset.
 
@@ -88,13 +97,15 @@ unchanged keystore install in place, preserving app data, subject to Android's
 normal installer confirmation. Do **not** rotate or lose this signing key.
 
 The GitHub Actions **debug APK artifact** is for development, not an update
-channel. Only publish signed GitHub Release APKs to the updater.
+channel. Only publish signed **GitHub Pre-release APKs** to the updater.
 
 ## Limitations
 
 - This updater intentionally only supports the public `MohamedRef/PageMint`
   repository and a single fixed release asset name; no arbitrary APK URL input.
 - It does not run automatically in the background. Checking is user-initiated.
+- Previews are experimental and may contain bugs. The updater does not select
+  ordinary Stable Releases, even if they were published more recently.
 - It does not use Google Play's in-app updates API.
 - GitHub must be reachable for checks/downloads.
 - On a debug APK with a different key, the updater warns rather than trying
