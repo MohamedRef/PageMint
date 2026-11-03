@@ -5,7 +5,11 @@ edition = "2021"
 license = "MIT"
 description = "PageMint offline-first document image processing engine"
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
+jni = "0.21"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 nalgebra = { version = "0.33", default-features = false, features = ["std"] }
 
