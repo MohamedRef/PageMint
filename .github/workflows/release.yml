@@ -1,0 +1,130 @@
+name: Publish signed PageMint release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (example: 0.1.1)"
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve and validate release version
+        shell: bash
+        env:
+          MANUAL_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            RELEASE_VERSION="$MANUAL_VERSION"
+          else
+            RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          if [[ ! "$RELEASE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Version must be MAJOR.MINOR.PATCH without leading zeroes" >&2
+            exit 1
+          fi
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          if (( major > 2000 || minor > 999 || patch > 999 )); then
+            echo "Version is outside the supported range" >&2
+            exit 1
+          fi
+          release_code=$((10#$major * 1000000 + 10#$minor * 1000 + 10#$patch))
+          if (( release_code < 1 || release_code > 2100000000 )); then
+            echo "Invalid Android version code" >&2
+            exit 1
+          fi
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> "$GITHUB_ENV"
+          echo "RELEASE_CODE=$release_code" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=v$RELEASE_VERSION" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Install Android SDK and NDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.2.12479018'
+      - name: Rust tests
+        run: cargo test --workspace
+      - name: Build Rust Android libraries
+        shell: bash
+        run: |
+          cargo install cargo-ndk --locked
+          export ANDROID_NDK_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}/ndk/27.2.12479018"
+          cargo ndk -t arm64-v8a -t x86_64 -o app/src/main/jniLibs build --release -p pagemint-core
+          test -s app/src/main/jniLibs/arm64-v8a/libpagemint_core.so
+          test -s app/src/main/jniLibs/x86_64/libpagemint_core.so
+      - name: Load persistent signing key from repository secrets
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.PAGEMINT_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.PAGEMINT_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.PAGEMINT_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.PAGEMINT_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$KEYSTORE_B64" || -z "$STORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
+            echo "Set the four PAGEMINT signing secrets before publishing a release" >&2
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/pagemint-release.jks"
+          chmod 600 "$RUNNER_TEMP/pagemint-release.jks"
+          echo "PAGEMINT_KEYSTORE_PATH=$RUNNER_TEMP/pagemint-release.jks" >> "$GITHUB_ENV"
+      - name: Run Android tests and build signed release APK
+        shell: bash
+        env:
+          PAGEMINT_KEYSTORE_PASSWORD: ${{ secrets.PAGEMINT_KEYSTORE_PASSWORD }}
+          PAGEMINT_KEY_ALIAS: ${{ secrets.PAGEMINT_KEY_ALIAS }}
+          PAGEMINT_KEY_PASSWORD: ${{ secrets.PAGEMINT_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease \
+            "-PpagemintVersionCode=$RELEASE_CODE" \
+            "-PpagemintVersionName=$RELEASE_VERSION"
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          mkdir -p dist
+          cp "$APK" dist/PageMint-release.apk
+          (cd dist && sha256sum PageMint-release.apk > PageMint-release.apk.sha256)
+      - name: Publish release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; refusing to replace a published APK" >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" \
+            dist/PageMint-release.apk \
+            dist/PageMint-release.apk.sha256 \
+            --target "$GITHUB_SHA" \
+            --title "PageMint $RELEASE_VERSION" \
+            --generate-notes \
+            --latest
