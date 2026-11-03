@@ -57,8 +57,9 @@ pub extern "system" fn Java_com_mohamedref_pagemint_cv_RustProcessor_nativeRecti
 ) -> jbyteArray {
     let work = || -> Option<RgbImage> {
         let bitmap = convert(&mut env, pixels, width, height)?;
-        let points = env.convert_float_array(quad).ok()?;
-        if points.len() != 8 { return None; }
+        if env.get_array_length(&quad).ok()? != 8 { return None; }
+        let mut points = [0.0f32; 8];
+        env.get_float_array_region(&quad, 0, &mut points).ok()?;
         let corners = [
             Corner { x: points[0] as f64, y: points[1] as f64 },
             Corner { x: points[2] as f64, y: points[3] as f64 },
