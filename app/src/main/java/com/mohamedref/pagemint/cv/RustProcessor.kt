@@ -3,13 +3,16 @@ package com.mohamedref.pagemint.cv
 import android.graphics.Bitmap
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.roundToInt
 
 /**
- * Thin Android-to-Rust bridge. Perspective correction and document enhancement
- * are implemented by pagemint-core, not the Android UI layer.
+ * Thin Android-to-Rust bridge. Document detection, perspective correction and
+ * document enhancement are implemented by pagemint-core, not the Android UI layer.
  */
 object RustProcessor {
-    init { System.loadLibrary("pagemint_core") }
+    val isAvailable: Boolean = runCatching { System.loadLibrary("pagemint_core") }.isSuccess
+
+    private external fun nativeDetect(rgba: ByteArray, width: Int, height: Int): FloatArray?
 
     private external fun nativeRectify(
         rgba: ByteArray, width: Int, height: Int,
@@ -17,6 +20,30 @@ object RustProcessor {
     ): ByteArray?
 
     private external fun nativeEnhance(rgba: ByteArray, width: Int, height: Int): ByteArray?
+
+
+    /** Preview-only scaling: no crop logic runs in Kotlin. All returned corners are normalized. */
+    fun detect(input: Bitmap): PageDetection {
+        check(isAvailable) { "Rust image engine is unavailable" }
+        val factor = minOf(1.0, 1024.0 / maxOf(input.width, input.height))
+        val small = if (factor < 1.0) {
+            val width = (input.width * factor).roundToInt().coerceAtLeast(32)
+            val height = (input.height * factor).roundToInt().coerceAtLeast(32)
+            Bitmap.createScaledBitmap(input, width, height, true)
+        } else input
+        return try {
+            val result = nativeDetect(pack(small), small.width, small.height)
+                ?: return PageDetection(QuadGeometry.fallback(), 0f, false)
+            if (result.size != 10) return PageDetection(QuadGeometry.fallback(), 0f, false)
+            val corners = (0..3).map { i -> Corner(result[i * 2], result[i * 2 + 1]) }
+            val automatic = result[9] == 1f && QuadGeometry.valid(corners) &&
+                result[8].isFinite() && result[8] in 0f..1f
+            if (automatic) PageDetection(corners, result[8], true)
+            else PageDetection(QuadGeometry.fallback(), 0f, false)
+        } finally {
+            if (small !== input) small.recycle()
+        }
+    }
 
     fun rectify(input: Bitmap, corners: List<Corner>, format: PageFormat, safetyBorder: Boolean): Bitmap {
         require(corners.size == 4)
