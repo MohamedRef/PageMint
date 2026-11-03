@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.mohamedref.pagemint.cv.Corner
 import com.mohamedref.pagemint.cv.DocumentDetector
-import com.mohamedref.pagemint.cv.DocumentProcessor
+import com.mohamedref.pagemint.cv.RustProcessor
 import com.mohamedref.pagemint.cv.PageDetection
 import com.mohamedref.pagemint.cv.PageFormat
 import com.mohamedref.pagemint.io.ImageIO
@@ -205,8 +205,8 @@ private fun ScannerApp(cvReady: Boolean) {
                                     scope.launch {
                                         try {
                                             val (newCrop, newEnhanced) = withContext(Dispatchers.Default) {
-                                                val crop = DocumentProcessor.rectify(bitmap, cropCorners, cropFormat, keepBorder)
-                                                try { Pair(crop, DocumentProcessor.proEnhance(crop)) }
+                                                val crop = RustProcessor.rectify(bitmap, cropCorners, cropFormat, keepBorder)
+                                                try { Pair(crop, RustProcessor.proEnhance(crop)) }
                                                 catch (error: Throwable) { crop.recycle(); throw error }
                                             }
                                             cropped?.recycle(); enhanced?.recycle()
