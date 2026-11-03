@@ -13,7 +13,8 @@ An independent, offline-first Android document scanner. **MVP / not production v
 - Separate Rust **Clean B&W** mode: morphological closing estimates the paper background, normalizes shadows and yields white paper with softly graded ink. Check faint color marks before exporting.
 - Before/after preview with **Original**, **Clean B&W** (default) and **Color** (existing color enhancement, computed on demand).
 - Save single-page PDF or JPEG through the system document picker; share a JPEG by scoped FileProvider.
-- No login, network permissions, advertising SDK or upload endpoint. Photos remain on the device.
+- **Updates** button in the app header checks the latest signed GitHub Release, verifies the APK checksum/package/signing identity, and opens Android's installer for an in-place update. See [setup and signing](docs/UPDATES.md).
+- No login, advertising SDK or document upload endpoint. Documents remain on the device. Internet permission is used only by the user-initiated GitHub Releases updater.
 
 ## Limitations
 
@@ -23,7 +24,7 @@ An independent, offline-first Android document scanner. **MVP / not production v
 - No live edge overlay, auto shutter, dewarping, multi-page PDF, OCR, history, camera zoom controls or release signing yet.
 - Photos are decoded to a maximum of about 4200 px on the longest edge to limit memory; no promise of full sensor resolution.
 - State is in-memory; work in progress does not survive process death. Export before closing.
-- No generated APK has been verified on a device yet.
+- Debug APKs build successfully in GitHub Actions; real-device scan quality and the signed-release update path still require device validation.
 
 ## Build
 
@@ -49,6 +50,10 @@ The debug APK is created under `app/build/outputs/apk/debug/` after a successful
 `RustProcessor.detect` downsamples a preview to at most 1024 px, then calls `pagemint-core::detector` via JNI. Rust tests multiple brightness thresholds on both raw and shadow-normalized luminance, finds connected foreground components, approximates convex hulls as quadrilaterals, and uses gradient-edge support when segmentation is uncertain. It returns normalized corners or a full-frame manual fallback. `CropEditor` always shows the corner handles for review. `RectificationGeometry` provides a Kotlin-only crop-preview estimate, while `pagemint-core::perspective` owns actual perspective correction and output dimensions. `RustProcessor` transfers pixel data via JNI and calls `pagemint-core::enhance` for luminance enhancement. See [the perspective correction notes](docs/PERSPECTIVE_CORRECTION.md).
 
 The Rust detector score is a heuristic and is **not a calibrated probability**. A full-frame fallback or a suspicious crop requires manual correction. Any candidate should be manually checked before export, particularly on documents containing text near an edge.
+
+## Application updates
+
+Use the **Updates** button in the app header on every screen. It checks a GitHub Release (no background polling), downloads a newer signed APK and opens Android's installer. **Stable signed GitHub Releases require one-time keystore setup in GitHub Actions secrets**; the automatically signed debug APKs may use different keys, so switching to the stable update channel can require a one-time uninstall/reinstall. See [docs/UPDATES.md](docs/UPDATES.md) for the exact procedure. Subsequent updates signed by the same key install over the current version and preserve app data.
 
 ## Development tests
 
