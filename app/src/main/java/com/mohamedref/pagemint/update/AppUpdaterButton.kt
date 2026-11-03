@@ -37,7 +37,7 @@ fun AppUpdaterButton() {
     var busy by remember { mutableStateOf(false) }
     var downloading by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
-    var message by remember { mutableStateOf("Check GitHub Releases for a new version.") }
+    var message by remember { mutableStateOf("Check for new PageMint Preview updates on GitHub.") }
     var available by remember { mutableStateOf<ReleaseUpdater.Release?>(null) }
     var awaitingPermission by remember { mutableStateOf<File?>(null) }
 
@@ -96,21 +96,21 @@ fun AppUpdaterButton() {
         busy = true
         downloading = false
         progress = 0
-        message = "Checking for a signed PageMint release…"
+        message = "Checking for the latest PageMint Preview…"
         available = null
         scope.launch {
             try {
                 when (val result = ReleaseUpdater.check(context)) {
                     is ReleaseUpdater.Check.Available -> {
                         available = result.release
-                        message = "Version ${result.release.version.name} is available."
+                        message = "Preview ${result.release.version.name} is available."
                     }
                     ReleaseUpdater.Check.Current -> {
-                        message = "You're on the latest published PageMint release."
+                        message = "You're on the latest published PageMint Preview."
                     }
                     ReleaseUpdater.Check.NotPublished -> {
-                        message = "No signed GitHub Release has been published yet. " +
-                            "This feature will work when the first release is available."
+                        message = "No PageMint Preview is published on GitHub yet. " +
+                            "The updater will work when the first signed Preview is available."
                     }
                 }
             } catch (error: Exception) {
@@ -122,13 +122,13 @@ fun AppUpdaterButton() {
     }
 
     TextButton(onClick = ::checkForUpdates) {
-        Text("Updates")
+        Text("Preview updates")
     }
 
     if (open) {
         AlertDialog(
             onDismissRequest = { if (!busy) open = false },
-            title = { Text("App updates") },
+            title = { Text("Preview updates") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(message, style = MaterialTheme.typography.bodyMedium)
@@ -144,7 +144,7 @@ fun AppUpdaterButton() {
                     }
                     val release = available
                     if (release != null && !downloading) {
-                        Text("New version: ${release.version.name}",
+                        Text("New Preview: ${release.version.name}",
                             style = MaterialTheme.typography.labelLarge)
                         if (release.notes.isNotBlank()) {
                             Text(release.notes.take(700), style = MaterialTheme.typography.bodySmall)
@@ -162,7 +162,7 @@ fun AppUpdaterButton() {
                             busy = true
                             downloading = true
                             progress = 0
-                            message = "Downloading version ${release.version.name} from GitHub…"
+                            message = "Downloading Preview ${release.version.name} from GitHub…"
                             scope.launch {
                                 try {
                                     val file = ReleaseUpdater.download(context, release) { percent ->
