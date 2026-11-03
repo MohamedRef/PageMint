@@ -4,8 +4,10 @@
 
 mod perspective;
 mod enhance;
+mod detector;
 #[cfg(target_os = "android")]
 mod android;
 
 pub use perspective::{Corner, OutputPlan, PaperFormat, PerspectiveError, plan, rectify};
 pub use enhance::{EnhanceSettings, pro_enhance};
+pub use detector::{detect, Detection};

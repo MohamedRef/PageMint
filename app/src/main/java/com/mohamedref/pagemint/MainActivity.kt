@@ -21,7 +21,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.mohamedref.pagemint.cv.Corner
-import com.mohamedref.pagemint.cv.DocumentDetector
 import com.mohamedref.pagemint.cv.RustProcessor
 import com.mohamedref.pagemint.cv.PageDetection
 import com.mohamedref.pagemint.cv.PageFormat
@@ -32,24 +31,23 @@ import com.mohamedref.pagemint.ui.CropEditor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.opencv.android.OpenCVLoader
 
 private enum class Stage { HOME, CAMERA, CROP, RESULT }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val cvReady = runCatching { OpenCVLoader.initLocal() }.getOrDefault(false)
+        val engineReady = RustProcessor.isAvailable
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF087D70))) {
-                ScannerApp(cvReady)
+                ScannerApp(engineReady)
             }
         }
     }
 }
 
 @Composable
-private fun ScannerApp(cvReady: Boolean) {
+private fun ScannerApp(engineReady: Boolean) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var stage by remember { mutableStateOf(Stage.HOME) }
@@ -68,14 +66,14 @@ private fun ScannerApp(cvReady: Boolean) {
     }
 
     fun openImage(uri: Uri) {
-        if (busy || !cvReady) return
+        if (busy || !engineReady) return
         busy = true
         status = null
         scope.launch {
             try {
                 val (bitmap, found) = withContext(Dispatchers.Default) {
                     val input = ImageIO.load(context, uri)
-                    try { Pair(input, DocumentDetector.detect(input)) }
+                    try { Pair(input, RustProcessor.detect(input)) }
                     catch (error: Throwable) { input.recycle(); throw error }
                 }
                 // Dispose old images only after the new image is ready.
@@ -154,8 +152,8 @@ private fun ScannerApp(cvReady: Boolean) {
                     Text("Offline scan", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 }
                 Spacer(Modifier.height(20.dp))
-                if (!cvReady) {
-                    Text("Document processing is unavailable: OpenCV failed to initialize.", color = MaterialTheme.colorScheme.error)
+                if (!engineReady) {
+                    Text("Document processing is unavailable: Rust native library is missing or failed to load.", color = MaterialTheme.colorScheme.error)
                 }
                 when (stage) {
                     Stage.HOME -> {
@@ -167,11 +165,11 @@ private fun ScannerApp(cvReady: Boolean) {
                         Spacer(Modifier.height(30.dp))
                         Button(onClick = {
                             if (cameraAllowed) stage = Stage.CAMERA else permission.launch(Manifest.permission.CAMERA)
-                        }, enabled = cvReady && !busy, modifier = Modifier.fillMaxWidth().height(54.dp)) {
+                        }, enabled = engineReady && !busy, modifier = Modifier.fillMaxWidth().height(54.dp)) {
                             Text("Scan with camera")
                         }
                         Spacer(Modifier.height(12.dp))
-                        OutlinedButton(onClick = { pickImage.launch("image/*") }, enabled = cvReady && !busy,
+                        OutlinedButton(onClick = { pickImage.launch("image/*") }, enabled = engineReady && !busy,
                             modifier = Modifier.fillMaxWidth().height(54.dp)) {
                             Text("Import a photo")
                         }

@@ -5,7 +5,7 @@ An independent, offline-first Android document scanner. **MVP / not production v
 ## What is implemented
 
 - CameraX camera capture and Android system image import.
-- Automatic four-corner detection using multiple OpenCV preprocessing strategies.
+- Automatic four-corner detection in pure Rust, combining global/adaptive brightness masks, connected components, convex-hull quadrilateral fitting, and a guarded gradient fallback.
 - Review and drag each corner before perspective correction.
 - Rust-based perspective rectification at the original decoded image resolution, using a camera-aware aspect estimator or exact A4, Letter and ID-card presets. Longest edge capped at 4800 px, output at 12 megapixels.
 - Optional 1.2% safety border to reduce accidental clipping of edge text.
@@ -26,7 +26,7 @@ An independent, offline-first Android document scanner. **MVP / not production v
 
 ## Build
 
-Open this folder in Android Studio and install Android SDK 36 and NDK 27.2.12479018. JDK 17, Rust toolchain, `cargo-ndk` and Android Rust targets are required. The Android host uses Kotlin 2.3.20, CameraX, OpenCV and Jetpack Compose; the perspective-warp and enhancement pipeline run in the independent `crates/pagemint-core` Rust crate.
+Open this folder in Android Studio and install Android SDK 36 and NDK 27.2.12479018. JDK 17, Rust toolchain, `cargo-ndk` and Android Rust targets are required. The Android host uses Kotlin 2.3.20, CameraX and Jetpack Compose solely for the camera, user interface and Android file APIs; **automatic cropping, perspective rectification and enhancement** run in the independent `crates/pagemint-core` Rust crate. No OpenCV Android dependency is required.
 
 ```bash
 rustup target add aarch64-linux-android x86_64-linux-android
@@ -41,17 +41,17 @@ For a local emulator use x86_64; for a modern ARM phone use arm64-v8a. The Andro
 
 The wrapper scripts download the **official Gradle 8.13 wrapper JAR** on first use and verify its SHA-256; the Gradle distribution ZIP is also SHA-256 pinned in `gradle-wrapper.properties`.
 
-The debug APK is created under `app/build/outputs/apk/debug/` after a successful build. Once the repository is pushed to GitHub, `.github/workflows/android.yml` runs Rust and Android unit tests and uploads a native-enabled debug APK artifact on pushes to `main` and pull requests.
+The debug APK is created under `app/build/outputs/apk/debug/` after a successful build. `.github/workflows/android.yml` runs Rust and Android unit tests and uploads a native-enabled debug APK artifact on pushes to `main` and pull requests.
 
 ## Image pipeline
 
-`DocumentDetector` downsamples only for candidate detection, tests four grayscale/contrast/edge strategies, ranks convex quadrilaterals by area, perpendicularity and image margins, and returns normalized corners. `CropEditor` always shows the corner handles for review. `RectificationGeometry` provides a Kotlin-only crop-preview estimate, while `pagemint-core::perspective` owns the actual perspective correction and output dimensions. `RustProcessor` transfers pixel data to Rust via JNI and calls `pagemint-core::enhance` for luminance enhancement. Detection is still in the Kotlin/OpenCV adapter and will be migrated separately. See [the perspective correction notes](docs/PERSPECTIVE_CORRECTION.md).
+`RustProcessor.detect` downsamples a preview to at most 1024 px, then calls `pagemint-core::detector` via JNI. Rust tests multiple brightness thresholds on both raw and shadow-normalized luminance, finds connected foreground components, approximates convex hulls as quadrilaterals, and uses gradient-edge support when segmentation is uncertain. It returns normalized corners or a full-frame manual fallback. `CropEditor` always shows the corner handles for review. `RectificationGeometry` provides a Kotlin-only crop-preview estimate, while `pagemint-core::perspective` owns actual perspective correction and output dimensions. `RustProcessor` transfers pixel data via JNI and calls `pagemint-core::enhance` for luminance enhancement. See [the perspective correction notes](docs/PERSPECTIVE_CORRECTION.md).
 
-The detector score is a heuristic and is **not a calibrated probability**. Any candidate should be manually checked before export, particularly on documents containing text near an edge.
+The Rust detector score is a heuristic and is **not a calibrated probability**. A full-frame fallback or a suspicious crop requires manual correction. Any candidate should be manually checked before export, particularly on documents containing text near an edge.
 
 ## Development tests
 
-- Rust tests: `cargo test --workspace` validates warp identity, paper ratio and pixel budgets, invalid quadrilaterals, and enhancement colour invariants.
+- Rust tests: `cargo test --workspace` validates synthetic still-image document detection (oblique, white-on-white, gradual shadows, blank fallback), warp identity, paper ratios and pixel budgets, invalid quadrilaterals, and enhancement colour invariants.
 
 - Android JVM unit tests: `QuadGeometryTest` validates point ordering, convexity, fallback and invalid geometry; `RectificationGeometryTest` checks planar projected views, exact paper ratios, borders and output memory caps.
 - `tools/geometry_smoke.kt` validates the core ratio arithmetic with a standalone Kotlin compiler and no Android SDK.
