@@ -9,15 +9,16 @@ An independent, offline-first Android document scanner. **MVP / not production v
 - Review and drag each corner before perspective correction.
 - Rust-based perspective rectification at the original decoded image resolution, using a camera-aware aspect estimator or exact A4, Letter and ID-card presets. Longest edge capped at 4800 px, output at 12 megapixels.
 - Optional 1.2% safety border to reduce accidental clipping of edge text.
-- Local Rust **Pro Enhance** mode: conservative background-illumination normalization on luminance while approximately retaining colour ratios.
-- Before/after preview with **Original crop** and **Pro Enhance**.
+- Local Rust **Color** mode: conservative luminance normalization while approximately retaining color ratios.
+- Separate Rust **Clean B&W** mode: morphological closing estimates the paper background, normalizes shadows and yields white paper with softly graded ink. Check faint color marks before exporting.
+- Before/after preview with **Original**, **Clean B&W** (default) and **Color** (existing color enhancement, computed on demand).
 - Save single-page PDF or JPEG through the system document picker; share a JPEG by scoped FileProvider.
 - No login, network permissions, advertising SDK or upload endpoint. Photos remain on the device.
 
 ## Limitations
 
 - Auto cropping is classical computer vision and can fail on severe shadows, white-on-white backgrounds, folded corners and curved book pages. When uncertain it defaults to a full-frame quad for manual correction.
-- This is a local restoration filter, **not CamScanner's proprietary Magic Pro/Omnifix**. Fine text, coloured stamps and severe highlights need device-level testing.
+- These are original local restoration filters, **not CamScanner's proprietary Magic Pro/Omnifix**. Fine text, coloured stamps and severe highlights need device-level testing.
 - Auto perspective ratio is estimated, not camera-calibrated; extreme one-axis skew or wide-angle lens distortion can require selecting the known paper size. Folded or curved pages still need dewarping.
 - No live edge overlay, auto shutter, dewarping, multi-page PDF, OCR, history, camera zoom controls or release signing yet.
 - Photos are decoded to a maximum of about 4200 px on the longest edge to limit memory; no promise of full sensor resolution.
@@ -58,6 +59,13 @@ The Rust detector score is a heuristic and is **not a calibrated probability**. 
 - `python tools/perspective_benchmark.py` generates five tilted paper photos and validates reference corner-to-corner warping against ground-truth paper images. These are synthetic reference warps and not device-level measurements.
 - `python tools/reference_benchmark.py` generates four synthetic documents and evaluates a Python/OpenCV *reference port* of the detector. These tests do **not** run Android code or establish field reliability.
 - See `docs/TEST_PLAN.md` for planned camera-device, OCR and visual-regression tests.
+
+## Open-source references
+
+- [DocShot](https://github.com/Artemarius/DocShot) (MIT): corner-scoring and orientation research; no direct dependency.
+- [Scanlite](https://github.com/gcol33/scanlite) (MIT): background closing and ratio normalization strategy, independently implemented in Rust.
+- [DocRes](https://github.com/ZZZHANG-jx/DocRes) (MIT repository): potential learned deshadowing and dewarping, no neural models or weights currently used.
+- [FairScan](https://github.com/pynicolas/FairScan) (GPL-3.0): segmentation design reference only; its GPL implementation is not copied.
 
 ## Design boundaries
 

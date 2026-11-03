@@ -20,6 +20,7 @@ object RustProcessor {
     ): ByteArray?
 
     private external fun nativeEnhance(rgba: ByteArray, width: Int, height: Int): ByteArray?
+    private external fun nativeScanBw(rgba: ByteArray, width: Int, height: Int): ByteArray?
 
 
     /** Preview-only scaling: no crop logic runs in Kotlin. All returned corners are normalized. */
@@ -57,6 +58,12 @@ object RustProcessor {
     fun proEnhance(input: Bitmap): Bitmap = unpack(
         nativeEnhance(pack(input), input.width, input.height)
             ?: error("Rust enhancement failed")
+    )
+
+    /** Black-and-white document preset implemented by the Rust image engine. */
+    fun cleanBlackWhite(input: Bitmap): Bitmap = unpack(
+        nativeScanBw(pack(input), input.width, input.height)
+            ?: error("Rust black-and-white scan failed")
     )
 
     private fun pack(bitmap: Bitmap): ByteArray {

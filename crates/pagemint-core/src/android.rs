@@ -2,7 +2,7 @@
 //! Returned image is [u32 width LE][u32 height LE][RGBA pixels].
 //! These routines never touch the network or Android storage.
 
-use crate::{detect, rectify, pro_enhance, Corner, EnhanceSettings, PaperFormat};
+use crate::{detect, rectify, pro_enhance, scan_bw, Corner, EnhanceSettings, PaperFormat};
 use image::{Rgb, RgbImage};
 use jni::objects::{JByteArray, JFloatArray, JObject};
 use jni::sys::{jboolean, jint, jbyteArray, jfloatArray};
@@ -126,4 +126,27 @@ pub extern "system" fn Java_com_mohamedref_pagemint_cv_RustProcessor_nativeDetec
     .ok()
     .flatten();
     result.unwrap_or(std::ptr::null_mut())
+}
+
+
+/// Optional scanned-paper black-and-white preset. The source bitmap remains intact.
+#[no_mangle]
+pub extern "system" fn Java_com_mohamedref_pagemint_cv_RustProcessor_nativeScanBw(
+    mut env: JNIEnv,
+    _receiver: JObject,
+    pixels: JByteArray,
+    width: jint,
+    height: jint,
+) -> jbyteArray {
+    let work = || -> Option<RgbImage> {
+        let bitmap = convert(&mut env, pixels, width, height)?;
+        Some(scan_bw(&bitmap))
+    };
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
+        .ok()
+        .flatten();
+    result
+        .as_ref()
+        .map(|image| make_result(&mut env, image))
+        .unwrap_or(std::ptr::null_mut())
 }
