@@ -44,9 +44,10 @@ object ReleaseUpdater {
     }
 
     class SigningMismatch : IOException(
-        "The installed APK uses a different signing certificate. " +
-            "Install the permanently signed PageMint release once; future signed updates " +
-            "can then install over it without uninstalling."
+        "The installed APK has a different signing certificate. " +
+            "Export your scans before changing versions. You may need to uninstall " +
+            "this debug build once, then install the permanently signed release. " +
+            "Future updates signed by the same key will not require uninstalling."
     )
 
     suspend fun check(context: Context): Check = withContext(Dispatchers.IO) {
