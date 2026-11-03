@@ -2,10 +2,10 @@
 //! Returned image is [u32 width LE][u32 height LE][RGBA pixels].
 //! These routines never touch the network or Android storage.
 
-use crate::{rectify, pro_enhance, Corner, EnhanceSettings, PaperFormat};
+use crate::{detect, rectify, pro_enhance, Corner, EnhanceSettings, PaperFormat};
 use image::{Rgb, RgbImage};
 use jni::objects::{JByteArray, JFloatArray, JObject};
-use jni::sys::{jboolean, jint, jbyteArray};
+use jni::sys::{jboolean, jint, jbyteArray, jfloatArray};
 use jni::JNIEnv;
 
 fn from_rgba(bytes: &[u8], width: u32, height: u32) -> Option<RgbImage> {
@@ -96,4 +96,34 @@ pub extern "system" fn Java_com_mohamedref_pagemint_cv_RustProcessor_nativeEnhan
     };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(work)).ok().flatten();
     result.as_ref().map(|image| make_result(&mut env, image)).unwrap_or(std::ptr::null_mut())
+}
+
+
+/// Output: [TL.x, TL.y, TR.x, TR.y, BR.x, BR.y, BL.x, BL.y, score, detectedFlag].
+/// Normalized coordinates map to the original EXIF-corrected source bitmap.
+#[no_mangle]
+pub extern "system" fn Java_com_mohamedref_pagemint_cv_RustProcessor_nativeDetect(
+    mut env: JNIEnv,
+    _receiver: JObject,
+    pixels: JByteArray,
+    width: jint,
+    height: jint,
+) -> jfloatArray {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let bitmap = convert(&mut env, pixels, width, height)?;
+        let detection = detect(&bitmap);
+        let mut floats = [0f32; 10];
+        for (index, point) in detection.corners.iter().enumerate() {
+            floats[2 * index] = point.x as f32;
+            floats[2 * index + 1] = point.y as f32;
+        }
+        floats[8] = detection.confidence;
+        floats[9] = if detection.automatic { 1.0 } else { 0.0 };
+        let array = env.new_float_array(10).ok()?;
+        env.set_float_array_region(&array, 0, &floats).ok()?;
+        Some(array.into_raw())
+    }))
+    .ok()
+    .flatten();
+    result.unwrap_or(std::ptr::null_mut())
 }
